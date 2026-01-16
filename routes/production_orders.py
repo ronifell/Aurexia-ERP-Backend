@@ -158,6 +158,22 @@ async def generate_travel_sheet(
     db.refresh(travel_sheet)
     return travel_sheet
 
+@router.get("/{order_id}/travel-sheets", response_model=List[TravelSheetResponse])
+async def get_travel_sheets(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all travel sheets for a production order"""
+    order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Production order not found")
+    
+    travel_sheets = db.query(TravelSheet).filter(
+        TravelSheet.production_order_id == order_id
+    ).all()
+    return travel_sheets
+
 @router.delete("/{order_id}")
 async def delete_production_order(
     order_id: int,
