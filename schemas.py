@@ -456,6 +456,7 @@ class QualityInspectionResponse(QualityInspectionBase):
     inspector_id: Optional[int] = None
     inspection_date: datetime
     created_at: datetime
+    production_order: Optional['ProductionOrderResponse'] = None
     
     class Config:
         from_attributes = True

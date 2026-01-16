@@ -299,6 +299,10 @@ class QualityInspection(Base):
     rejection_reason = Column(Text)
     notes = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    travel_sheet = relationship("TravelSheet")
+    production_order = relationship("ProductionOrder")
+    inspector = relationship("User", foreign_keys=[inspector_id])
 
 class Shipment(Base):
     __tablename__ = "shipments"
