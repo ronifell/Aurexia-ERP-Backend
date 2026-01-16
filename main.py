@@ -32,14 +32,15 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# Add middleware to log all requests
+# Add middleware to log requests (only in debug mode to reduce overhead)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    print(f"\n[REQUEST] {request.method} {request.url.path}")
-    print(f"[HEADERS] Authorization: {request.headers.get('authorization', 'NOT PRESENT')[:50] if request.headers.get('authorization') else 'NOT PRESENT'}...")
-    print(f"[HEADERS] All headers: {dict(request.headers)}")
+    if settings.DEBUG:
+        # Only log basic request info in debug mode
+        print(f"[{request.method}] {request.url.path}")
     response = await call_next(request)
-    print(f"[RESPONSE] Status: {response.status_code}")
+    if settings.DEBUG:
+        print(f"[{response.status_code}] {request.url.path}")
     return response
 
 # Include routers
