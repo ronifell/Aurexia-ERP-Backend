@@ -3,8 +3,9 @@ QR Scanner routes for production tracking
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from database import get_db
-from models import User, TravelSheetOperation, TravelSheet
+from models import User, TravelSheetOperation, TravelSheet, ProductionOrder
 from schemas import QRScanRequest, QRScanResponse, TravelSheetOperationUpdate
 from auth import get_current_active_user
 import json
@@ -124,6 +125,39 @@ async def complete_operation(
     
     db.commit()
     db.refresh(operation)
+    
+    # Update production order quantities based on all completed operations
+    travel_sheet = db.query(TravelSheet).filter(
+        TravelSheet.id == operation.travel_sheet_id
+    ).first()
+    
+    if travel_sheet and travel_sheet.production_order_id:
+        production_order = db.query(ProductionOrder).filter(
+            ProductionOrder.id == travel_sheet.production_order_id
+        ).first()
+        
+        if production_order:
+            # Get all travel sheets for this production order
+            all_travel_sheets = db.query(TravelSheet).filter(
+                TravelSheet.production_order_id == production_order.id
+            ).all()
+            
+            travel_sheet_ids = [ts.id for ts in all_travel_sheets]
+            
+            # Sum all quantity_good and quantity_scrap from completed operations
+            result = db.query(
+                func.sum(TravelSheetOperation.quantity_good).label('total_good'),
+                func.sum(TravelSheetOperation.quantity_scrap).label('total_scrap')
+            ).filter(
+                TravelSheetOperation.travel_sheet_id.in_(travel_sheet_ids),
+                TravelSheetOperation.status == 'Completed'
+            ).first()
+            
+            # Update production order quantities
+            production_order.quantity_completed = int(result.total_good) if result.total_good else 0
+            production_order.quantity_scrapped = int(result.total_scrap) if result.total_scrap else 0
+            
+            db.commit()
     
     return {
         "success": True,
