@@ -111,9 +111,34 @@ async def update_sales_order(
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
     
-    update_data = order_update.model_dump(exclude_unset=True)
+    # Update basic order fields
+    update_data = order_update.model_dump(exclude_unset=True, exclude={'items'})
     for field, value in update_data.items():
         setattr(order, field, value)
+    
+    # Update items if provided
+    if order_update.items is not None:
+        # Delete existing items
+        db.query(SalesOrderItem).filter(SalesOrderItem.sales_order_id == order_id).delete()
+        
+        # Create new items
+        for item in order_update.items:
+            # Get part number to check price
+            part_number = db.query(PartNumber).filter(PartNumber.id == item.part_number_id).first()
+            if not part_number:
+                raise HTTPException(status_code=400, detail=f"Part number {item.part_number_id} not found")
+            
+            unit_price = item.unit_price if item.unit_price else part_number.unit_price
+            total_price = unit_price * item.quantity if unit_price else None
+            
+            db_item = SalesOrderItem(
+                sales_order_id=order.id,
+                part_number_id=item.part_number_id,
+                quantity=item.quantity,
+                unit_price=unit_price,
+                total_price=total_price
+            )
+            db.add(db_item)
     
     db.commit()
     db.refresh(order)

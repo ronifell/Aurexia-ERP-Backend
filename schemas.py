@@ -274,15 +274,20 @@ class SalesOrderBase(BaseModel):
     customer_id: int
     order_date: date
     due_date: date
+    status: Optional[str] = 'Open'
     notes: Optional[str] = None
 
 class SalesOrderCreate(SalesOrderBase):
     items: List[SalesOrderItemCreate]
 
 class SalesOrderUpdate(BaseModel):
+    po_number: Optional[str] = None
+    customer_id: Optional[int] = None
+    order_date: Optional[date] = None
     due_date: Optional[date] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    items: Optional[List[SalesOrderItemCreate]] = None
 
 class SalesOrderResponse(SalesOrderBase):
     id: int
