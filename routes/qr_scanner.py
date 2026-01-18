@@ -4,7 +4,7 @@ QR Scanner routes for production tracking
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import User, TravelSheetOperation
+from models import User, TravelSheetOperation, TravelSheet
 from schemas import QRScanRequest, QRScanResponse, TravelSheetOperationUpdate
 from auth import get_current_active_user
 import json
@@ -121,6 +121,26 @@ async def complete_operation(
     for field, value in update_data.items():
         if field not in ['status', 'start_time', 'end_time']:
             setattr(operation, field, value)
+    
+    # Check if all operations in the travel sheet are completed
+    travel_sheet = db.query(TravelSheet).filter(
+        TravelSheet.id == operation.travel_sheet_id
+    ).first()
+    
+    if travel_sheet:
+        # Count total operations and completed operations
+        total_ops = db.query(TravelSheetOperation).filter(
+            TravelSheetOperation.travel_sheet_id == operation.travel_sheet_id
+        ).count()
+        
+        completed_ops = db.query(TravelSheetOperation).filter(
+            TravelSheetOperation.travel_sheet_id == operation.travel_sheet_id,
+            TravelSheetOperation.status == "Completed"
+        ).count()
+        
+        # Update travel sheet status if all operations are completed
+        if completed_ops >= total_ops and travel_sheet.status != "Completed":
+            travel_sheet.status = "Completed"
     
     db.commit()
     db.refresh(operation)

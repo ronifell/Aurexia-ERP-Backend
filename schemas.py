@@ -115,6 +115,14 @@ class SupplierBase(BaseModel):
 class SupplierCreate(SupplierBase):
     pass
 
+class SupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+
 class SupplierResponse(SupplierBase):
     id: int
     is_active: bool
@@ -135,6 +143,13 @@ class MaterialBase(BaseModel):
 
 class MaterialCreate(MaterialBase):
     pass
+
+class MaterialUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    unit: Optional[str] = None
+    minimum_stock: Optional[Decimal] = None
+    is_active: Optional[bool] = None
 
 class MaterialResponse(MaterialBase):
     id: int
