@@ -23,10 +23,24 @@ async def get_dashboard_stats(
     today = date.today()
     risk_date = today + timedelta(days=3)
     
-    # Total open sales orders
+    # Total open sales orders (Open + Partial)
     total_open_orders = db.query(SalesOrder).filter(
         SalesOrder.status.in_(['Open', 'Partial'])
     ).count()
+    
+    # Total completed sales orders
+    total_completed_orders = db.query(SalesOrder).filter(
+        SalesOrder.status == 'Completed'
+    ).count()
+    
+    # Total shipped orders (orders with at least one shipment)
+    from models import Shipment
+    # Count distinct sales orders that have shipments
+    total_shipped_orders = db.query(
+        func.count(func.distinct(Shipment.sales_order_id))
+    ).filter(
+        Shipment.sales_order_id.isnot(None)
+    ).scalar() or 0
     
     # Total production orders in production
     total_in_production = db.query(ProductionOrder).filter(
@@ -53,6 +67,8 @@ async def get_dashboard_stats(
     
     return DashboardStats(
         total_open_orders=total_open_orders,
+        total_completed_orders=total_completed_orders,
+        total_shipped_orders=total_shipped_orders,
         total_in_production=total_in_production,
         total_delayed=total_delayed,
         total_at_risk=total_at_risk,
@@ -95,6 +111,14 @@ async def get_production_dashboard(
         # Calculate completion percentage
         completion = calculate_completion_percentage(po.quantity_completed, po.quantity)
         
+        # Calculate shipped quantity for this production order
+        from models import ShipmentItem
+        shipped_quantity = db.query(
+            func.sum(ShipmentItem.quantity)
+        ).filter(
+            ShipmentItem.production_order_id == po.id
+        ).scalar() or 0
+        
         # Apply filter
         if risk_status and risk != risk_status:
             continue
@@ -111,6 +135,7 @@ async def get_production_dashboard(
             part_description=po.part_number.description if po.part_number else None,
             quantity=po.quantity,
             quantity_completed=po.quantity_completed,
+            quantity_shipped=int(shipped_quantity),
             quantity_scrapped=po.quantity_scrapped,
             status=po.status,
             due_date=po.due_date,

@@ -10,7 +10,7 @@ from database import engine, Base
 import models
 
 # Import routers
-from routes import auth, users, customers, part_numbers, sales_orders, production_orders, qr_scanner, dashboard, processes, quality_inspections
+from routes import auth, users, customers, part_numbers, sales_orders, production_orders, qr_scanner, dashboard, processes, quality_inspections, shipments, exports
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -54,6 +54,8 @@ app.include_router(qr_scanner.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 app.include_router(processes.router, prefix="/api")
 app.include_router(quality_inspections.router, prefix="/api")
+app.include_router(shipments.router, prefix="/api")
+app.include_router(exports.router, prefix="/api")
 
 @app.get("/")
 async def root():

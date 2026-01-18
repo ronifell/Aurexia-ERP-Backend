@@ -318,6 +318,9 @@ class Shipment(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Relationships
+    customer = relationship("Customer")
+    sales_order = relationship("SalesOrder")
     items = relationship("ShipmentItem", back_populates="shipment", cascade="all, delete-orphan")
 
 class ShipmentItem(Base):
@@ -332,4 +335,7 @@ class ShipmentItem(Base):
     unit_price = Column(Numeric(10, 2))
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Relationships
     shipment = relationship("Shipment", back_populates="items")
+    part_number = relationship("PartNumber")
+    production_order = relationship("ProductionOrder")

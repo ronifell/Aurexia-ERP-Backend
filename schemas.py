@@ -466,7 +466,7 @@ class QualityInspectionResponse(QualityInspectionBase):
 # ============================================
 
 class ShipmentItemBase(BaseModel):
-    sales_order_item_id: int
+    sales_order_item_id: Optional[int] = None
     part_number_id: int
     production_order_id: Optional[int] = None
     quantity: int
@@ -478,6 +478,8 @@ class ShipmentItemCreate(ShipmentItemBase):
 class ShipmentItemResponse(ShipmentItemBase):
     id: int
     created_at: datetime
+    part_number: Optional['PartNumberResponse'] = None
+    production_order: Optional['ProductionOrderResponse'] = None
     
     class Config:
         from_attributes = True
@@ -486,6 +488,7 @@ class ShipmentBase(BaseModel):
     customer_id: int
     sales_order_id: Optional[int] = None
     shipment_date: date
+    status: Optional[str] = None
     tracking_number: Optional[str] = None
     notes: Optional[str] = None
 
@@ -497,6 +500,8 @@ class ShipmentResponse(ShipmentBase):
     shipment_number: str
     status: str
     created_at: datetime
+    customer: Optional[CustomerResponse] = None
+    sales_order: Optional['SalesOrderResponse'] = None
     items: List[ShipmentItemResponse] = []
     
     class Config:
@@ -508,6 +513,8 @@ class ShipmentResponse(ShipmentBase):
 
 class DashboardStats(BaseModel):
     total_open_orders: int
+    total_completed_orders: int
+    total_shipped_orders: int
     total_in_production: int
     total_delayed: int
     total_at_risk: int
@@ -522,6 +529,7 @@ class ProductionDashboardItem(BaseModel):
     part_description: Optional[str] = None
     quantity: int
     quantity_completed: int
+    quantity_shipped: int
     quantity_scrapped: int
     status: str
     due_date: Optional[date] = None
