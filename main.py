@@ -26,7 +26,7 @@ app = FastAPI(
 # Configure CORS - MUST be added first!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=settings.ALLOWED_ORIGINS_LIST,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,11 +36,11 @@ app.add_middleware(
 # Add middleware to log requests (only in debug mode to reduce overhead)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    if settings.DEBUG:
+    if settings.DEBUG_BOOL:
         # Only log basic request info in debug mode
         print(f"[{request.method}] {request.url.path}")
     response = await call_next(request)
-    if settings.DEBUG:
+    if settings.DEBUG_BOOL:
         print(f"[{response.status_code}] {request.url.path}")
     return response
 
@@ -77,4 +77,4 @@ if __name__ == "__main__":
     import uvicorn
     # Use PORT environment variable for Render (Render sets this automatically)
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, reload=settings.DEBUG)
+    uvicorn.run(app, host="0.0.0.0", port=port, reload=settings.DEBUG_BOOL)
