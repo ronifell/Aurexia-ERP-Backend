@@ -24,24 +24,44 @@ app = FastAPI(
 )
 
 # Configure CORS - MUST be added first!
+# Explicitly set allowed origins for local development
+cors_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+
+# Add any additional origins from environment variable (comma-separated)
+if settings.ALLOWED_ORIGINS:
+    for origin in settings.ALLOWED_ORIGINS.split(","):
+        origin = origin.strip()
+        # Only add if it's a valid URL and not already in the list
+        if origin and origin.startswith("http") and origin not in cors_origins:
+            cors_origins.append(origin)
+
+print(f"CORS: Allowing origins: {cors_origins}")
+
+# Add CORS middleware with explicit configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS_LIST,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=False,  # Set to False since we're not using cookies
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Explicit methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# Add middleware to log requests (only in debug mode to reduce overhead)
+# Add middleware to log requests (always log for debugging CORS issues)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    if settings.DEBUG_BOOL:
-        # Only log basic request info in debug mode
-        print(f"[{request.method}] {request.url.path}")
+    # Always log requests to help debug CORS issues
+    origin = request.headers.get('origin', 'N/A')
+    print(f"[{request.method}] {request.url.path} - Origin: {origin}")
     response = await call_next(request)
-    if settings.DEBUG_BOOL:
-        print(f"[{response.status_code}] {request.url.path}")
+    cors_header = response.headers.get('access-control-allow-origin', 'NOT SET')
+    print(f"[{response.status_code}] {request.url.path} - Access-Control-Allow-Origin: {cors_header}")
     return response
 
 # Include routers
@@ -72,6 +92,11 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.get("/api/test-cors")
+async def test_cors():
+    """Test endpoint to verify CORS is working"""
+    return {"message": "CORS is working!", "status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -554,3 +554,62 @@ def update_shipment_status(
     )
     
     return shipment
+
+
+@router.get("/sales-order/{sales_order_id}/approved-quantities")
+def get_approved_quantities_for_sales_order(
+    sales_order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get approved quantities available for shipping for each part number in a sales order"""
+    sales_order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
+    if not sales_order:
+        raise HTTPException(status_code=404, detail="Sales order not found")
+    
+    result = []
+    
+    for item in sales_order.items:
+        part_number_id = item.part_number_id
+        
+        # Find all production orders for this part number that are linked to this sales order
+        production_orders = db.query(ProductionOrder).filter(
+            ProductionOrder.part_number_id == part_number_id,
+            ProductionOrder.sales_order_id == sales_order_id
+        ).all()
+        
+        total_approved = 0
+        total_shipped = 0
+        
+        for po in production_orders:
+            # Get quality inspections for this production order
+            inspections = db.query(QualityInspection).filter(
+                QualityInspection.production_order_id == po.id,
+                QualityInspection.status == "Released"
+            ).all()
+            
+            approved_qty = sum(inspection.quantity_approved or 0 for inspection in inspections)
+            total_approved += approved_qty
+            
+            # Calculate already shipped from this production order
+            shipped = db.query(ShipmentItem).filter(
+                ShipmentItem.production_order_id == po.id
+            ).with_entities(
+                func.sum(ShipmentItem.quantity)
+            ).scalar() or 0
+            
+            total_shipped += shipped
+        
+        available = total_approved - total_shipped
+        
+        result.append({
+            "part_number_id": part_number_id,
+            "part_number": item.part_number.part_number if item.part_number else None,
+            "ordered_quantity": item.quantity,
+            "already_shipped": item.quantity_shipped or 0,
+            "approved_quantity": total_approved,
+            "available_to_ship": max(0, available),
+            "remaining_to_fulfill": max(0, item.quantity - (item.quantity_shipped or 0))
+        })
+    
+    return result
