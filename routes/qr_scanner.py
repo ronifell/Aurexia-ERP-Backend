@@ -36,6 +36,72 @@ async def scan_qr_code(
             message="Invalid QR code format"
         )
     
+    # Handle travel sheet QR code - find first pending operation
+    if qr_data.get("type") == "travel_sheet":
+        # Find travel sheet by QR code or travel sheet number
+        travel_sheet = None
+        if "number" in qr_data:
+            travel_sheet = db.query(TravelSheet).filter(
+                TravelSheet.travel_sheet_number == qr_data["number"]
+            ).first()
+        else:
+            travel_sheet = db.query(TravelSheet).filter(
+                TravelSheet.qr_code == scan_request.qr_code
+            ).first()
+        
+        if not travel_sheet:
+            return QRScanResponse(
+                success=False,
+                message="Travel sheet not found"
+            )
+        
+        # Find first pending operation in sequence order
+        first_pending_operation = db.query(TravelSheetOperation).filter(
+            TravelSheetOperation.travel_sheet_id == travel_sheet.id,
+            TravelSheetOperation.status == "Pending"
+        ).order_by(TravelSheetOperation.sequence_number).first()
+        
+        if not first_pending_operation:
+            # Check if there are any in-progress operations
+            in_progress_operation = db.query(TravelSheetOperation).filter(
+                TravelSheetOperation.travel_sheet_id == travel_sheet.id,
+                TravelSheetOperation.status == "In Progress"
+            ).order_by(TravelSheetOperation.sequence_number).first()
+            
+            if in_progress_operation:
+                # Return the in-progress operation for completion
+                return QRScanResponse(
+                    success=True,
+                    message="Ready to complete operation",
+                    operation_id=in_progress_operation.id,
+                    travel_sheet_id=in_progress_operation.travel_sheet_id,
+                    process_name=in_progress_operation.process.name if in_progress_operation.process else "Unknown",
+                    status="awaiting_completion"
+                )
+            else:
+                return QRScanResponse(
+                    success=False,
+                    message="No pending operations found in this travel sheet. All operations may be completed."
+                )
+        
+        # Start the first pending operation
+        first_pending_operation.status = "In Progress"
+        first_pending_operation.operator_id = operator.id
+        first_pending_operation.start_time = datetime.utcnow()
+        message = f"Operation started: {first_pending_operation.process.name if first_pending_operation.process else 'Unknown'}"
+        
+        db.commit()
+        db.refresh(first_pending_operation)
+        
+        return QRScanResponse(
+            success=True,
+            message=message,
+            operation_id=first_pending_operation.id,
+            travel_sheet_id=first_pending_operation.travel_sheet_id,
+            process_name=first_pending_operation.process.name if first_pending_operation.process else "Unknown",
+            status=first_pending_operation.status
+        )
+    
     # Handle operation QR code
     if qr_data.get("type") == "operation":
         operation = db.query(TravelSheetOperation).filter(
@@ -88,7 +154,7 @@ async def scan_qr_code(
     
     return QRScanResponse(
         success=False,
-        message="Unsupported QR code type"
+        message=f"Unsupported QR code type: {qr_data.get('type', 'unknown')}. Expected 'operation' or 'travel_sheet'."
     )
 
 @router.put("/operations/{operation_id}/complete")
