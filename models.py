@@ -142,6 +142,12 @@ class PartNumber(Base):
     customer = relationship("Customer", back_populates="part_numbers")
     routings = relationship("PartRouting", back_populates="part_number", cascade="all, delete-orphan")
     materials = relationship("PartMaterial", back_populates="part_number", cascade="all, delete-orphan")
+    sub_assemblies = relationship(
+        "PartSubAssembly",
+        primaryjoin="PartNumber.id == PartSubAssembly.parent_part_id",
+        back_populates="parent_part",
+        cascade="all, delete-orphan"
+    )
 
 class PartRouting(Base):
     __tablename__ = "part_routings"
@@ -164,11 +170,26 @@ class PartMaterial(Base):
     material_id = Column(Integer, ForeignKey("materials.id"))
     quantity = Column(Numeric(10, 4), nullable=False)  # Quantity per unit of part
     unit = Column(String(20))  # Unit of measurement (kg, m, pcs, etc.)
+    scrap_percentage = Column(Numeric(5, 2), default=0)  # Scrap percentage (0-100)
     notes = Column(Text)  # Optional notes about this material requirement
     created_at = Column(DateTime, default=datetime.utcnow)
     
     part_number = relationship("PartNumber", back_populates="materials")
     material = relationship("Material")
+
+class PartSubAssembly(Base):
+    __tablename__ = "part_sub_assemblies"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    parent_part_id = Column(Integer, ForeignKey("part_numbers.id", ondelete="CASCADE"), nullable=False)
+    child_part_id = Column(Integer, ForeignKey("part_numbers.id", ondelete="CASCADE"), nullable=False)
+    quantity = Column(Numeric(10, 4), nullable=False)  # Quantity of child part per unit of parent part
+    unit = Column(String(20))  # Unit of measurement (pcs, units, etc.)
+    notes = Column(Text)  # Optional notes about this sub-assembly requirement
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    parent_part = relationship("PartNumber", foreign_keys=[parent_part_id], back_populates="sub_assemblies")
+    child_part = relationship("PartNumber", foreign_keys=[child_part_id])
 
 class SalesOrder(Base):
     __tablename__ = "sales_orders"

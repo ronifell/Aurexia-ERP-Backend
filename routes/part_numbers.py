@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List
 from database import get_db
-from models import User, PartNumber, PartRouting, PartMaterial, Customer, Material
+from models import User, PartNumber, PartRouting, PartMaterial, PartSubAssembly, Customer, Material
 from schemas import PartNumberResponse, PartNumberCreate, PartNumberUpdate
 from auth import get_current_active_user
 
@@ -23,6 +23,7 @@ async def get_part_numbers(
     """Get all part numbers"""
     query = db.query(PartNumber).options(
         joinedload(PartNumber.materials).joinedload(PartMaterial.material),
+        joinedload(PartNumber.sub_assemblies).joinedload(PartSubAssembly.child_part),
         joinedload(PartNumber.routings).joinedload(PartRouting.process),
         joinedload(PartNumber.customer)
     )
@@ -42,6 +43,7 @@ async def get_part_number(
     """Get a specific part number"""
     part_number = db.query(PartNumber).options(
         joinedload(PartNumber.materials).joinedload(PartMaterial.material),
+        joinedload(PartNumber.sub_assemblies).joinedload(PartSubAssembly.child_part),
         joinedload(PartNumber.routings).joinedload(PartRouting.process),
         joinedload(PartNumber.customer)
     ).filter(PartNumber.id == part_number_id).first()
@@ -62,7 +64,7 @@ async def create_part_number(
         raise HTTPException(status_code=400, detail="Part number already exists")
     
     # Create part number
-    part_data = part_number.model_dump(exclude={'routings', 'materials'})
+    part_data = part_number.model_dump(exclude={'routings', 'materials', 'sub_assemblies'})
     db_part = PartNumber(**part_data)
     db.add(db_part)
     db.flush()  # Get the ID without committing
@@ -102,6 +104,36 @@ async def create_part_number(
             )
             db.add(db_material)
     
+    # Create sub-assemblies
+    if part_number.sub_assemblies:
+        # Check for duplicate sub-assemblies
+        child_part_ids = [sa.child_part_id for sa in part_number.sub_assemblies]
+        if len(child_part_ids) != len(set(child_part_ids)):
+            raise HTTPException(status_code=400, detail="Duplicate sub-assemblies are not allowed")
+        
+        # Validate sub-assemblies exist and prevent circular references
+        for sub_assembly in part_number.sub_assemblies:
+            # Prevent part from containing itself
+            if sub_assembly.child_part_id == db_part.id:
+                raise HTTPException(status_code=400, detail="A part cannot contain itself as a sub-assembly")
+            
+            # Validate child part exists
+            child_part = db.query(PartNumber).filter(PartNumber.id == sub_assembly.child_part_id).first()
+            if not child_part:
+                raise HTTPException(status_code=400, detail=f"Part number with ID {sub_assembly.child_part_id} not found")
+            
+            # Validate quantity > 0 (handled by schema, but double-check)
+            if sub_assembly.quantity <= 0:
+                raise HTTPException(status_code=400, detail="Sub-assembly quantity must be greater than 0")
+        
+        # Create sub-assemblies
+        for sub_assembly in part_number.sub_assemblies:
+            db_sub_assembly = PartSubAssembly(
+                parent_part_id=db_part.id,
+                **sub_assembly.model_dump()
+            )
+            db.add(db_sub_assembly)
+    
     db.commit()
     db.refresh(db_part)
     return db_part
@@ -116,13 +148,14 @@ async def update_part_number(
     """Update a part number"""
     part_number = db.query(PartNumber).options(
         joinedload(PartNumber.materials).joinedload(PartMaterial.material),
+        joinedload(PartNumber.sub_assemblies).joinedload(PartSubAssembly.child_part),
         joinedload(PartNumber.routings).joinedload(PartRouting.process),
         joinedload(PartNumber.customer)
     ).filter(PartNumber.id == part_number_id).first()
     if not part_number:
         raise HTTPException(status_code=404, detail="Part number not found")
     
-    update_data = part_number_update.model_dump(exclude_unset=True, exclude={'materials'})
+    update_data = part_number_update.model_dump(exclude_unset=True, exclude={'materials', 'sub_assemblies'})
     for field, value in update_data.items():
         setattr(part_number, field, value)
     
@@ -156,6 +189,41 @@ async def update_part_number(
                     **material.model_dump()
                 )
                 db.add(db_material)
+    
+    # Update sub-assemblies if provided (explicitly set in request)
+    if part_number_update.sub_assemblies is not None:
+        # Delete existing sub-assemblies
+        db.query(PartSubAssembly).filter(PartSubAssembly.parent_part_id == part_number_id).delete()
+        
+        # Validate and create new sub-assemblies (if any)
+        if part_number_update.sub_assemblies:
+            # Check for duplicate sub-assemblies
+            child_part_ids = [sa.child_part_id for sa in part_number_update.sub_assemblies]
+            if len(child_part_ids) != len(set(child_part_ids)):
+                raise HTTPException(status_code=400, detail="Duplicate sub-assemblies are not allowed")
+            
+            # Validate sub-assemblies exist and prevent circular references
+            for sub_assembly in part_number_update.sub_assemblies:
+                # Prevent part from containing itself
+                if sub_assembly.child_part_id == part_number_id:
+                    raise HTTPException(status_code=400, detail="A part cannot contain itself as a sub-assembly")
+                
+                # Validate child part exists
+                child_part = db.query(PartNumber).filter(PartNumber.id == sub_assembly.child_part_id).first()
+                if not child_part:
+                    raise HTTPException(status_code=400, detail=f"Part number with ID {sub_assembly.child_part_id} not found")
+                
+                # Validate quantity > 0
+                if sub_assembly.quantity <= 0:
+                    raise HTTPException(status_code=400, detail="Sub-assembly quantity must be greater than 0")
+            
+            # Create new sub-assemblies
+            for sub_assembly in part_number_update.sub_assemblies:
+                db_sub_assembly = PartSubAssembly(
+                    parent_part_id=part_number_id,
+                    **sub_assembly.model_dump()
+                )
+                db.add(db_sub_assembly)
     
     db.commit()
     db.refresh(part_number)

@@ -239,6 +239,7 @@ class PartMaterialBase(BaseModel):
     material_id: int
     quantity: Decimal = Field(..., gt=0, description="Quantity must be greater than 0")
     unit: Optional[str] = None
+    scrap_percentage: Optional[Decimal] = Field(default=0, ge=0, le=100, description="Scrap percentage (0-100)")
     notes: Optional[str] = None
 
 class PartMaterialCreate(PartMaterialBase):
@@ -247,6 +248,23 @@ class PartMaterialCreate(PartMaterialBase):
 class PartMaterialResponse(PartMaterialBase):
     id: int
     material: Optional[MaterialResponse] = None
+    
+    class Config:
+        from_attributes = True
+
+class PartSubAssemblyBase(BaseModel):
+    child_part_id: int
+    quantity: Decimal = Field(..., gt=0, description="Quantity of child part required per unit of parent part, must be greater than 0")
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class PartSubAssemblyCreate(PartSubAssemblyBase):
+    pass
+
+class PartSubAssemblyResponse(PartSubAssemblyBase):
+    id: int
+    parent_part_id: int
+    child_part: Optional["PartNumberResponse"] = None  # Include child part details
     
     class Config:
         from_attributes = True
@@ -261,6 +279,7 @@ class PartNumberBase(BaseModel):
 class PartNumberCreate(PartNumberBase):
     routings: Optional[List[PartRoutingCreate]] = []
     materials: Optional[List[PartMaterialCreate]] = []
+    sub_assemblies: Optional[List[PartSubAssemblyCreate]] = []
 
 class PartNumberUpdate(BaseModel):
     description: Optional[str] = None
@@ -268,6 +287,7 @@ class PartNumberUpdate(BaseModel):
     unit_price: Optional[Decimal] = None
     is_active: Optional[bool] = None
     materials: Optional[List[PartMaterialCreate]] = None
+    sub_assemblies: Optional[List[PartSubAssemblyCreate]] = None
 
 class PartNumberResponse(PartNumberBase):
     id: int
@@ -276,6 +296,7 @@ class PartNumberResponse(PartNumberBase):
     customer: Optional[CustomerResponse] = None
     routings: List[PartRoutingResponse] = []
     materials: List[PartMaterialResponse] = []
+    sub_assemblies: List[PartSubAssemblyResponse] = []
     
     class Config:
         from_attributes = True
