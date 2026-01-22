@@ -235,6 +235,22 @@ class PartRoutingResponse(PartRoutingBase):
     class Config:
         from_attributes = True
 
+class PartMaterialBase(BaseModel):
+    material_id: int
+    quantity: Decimal = Field(..., gt=0, description="Quantity must be greater than 0")
+    unit: Optional[str] = None
+    notes: Optional[str] = None
+
+class PartMaterialCreate(PartMaterialBase):
+    pass
+
+class PartMaterialResponse(PartMaterialBase):
+    id: int
+    material: Optional[MaterialResponse] = None
+    
+    class Config:
+        from_attributes = True
+
 class PartNumberBase(BaseModel):
     part_number: str
     customer_id: Optional[int] = None
@@ -244,12 +260,14 @@ class PartNumberBase(BaseModel):
 
 class PartNumberCreate(PartNumberBase):
     routings: Optional[List[PartRoutingCreate]] = []
+    materials: Optional[List[PartMaterialCreate]] = []
 
 class PartNumberUpdate(BaseModel):
     description: Optional[str] = None
     material_type: Optional[str] = None
     unit_price: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    materials: Optional[List[PartMaterialCreate]] = None
 
 class PartNumberResponse(PartNumberBase):
     id: int
@@ -257,6 +275,7 @@ class PartNumberResponse(PartNumberBase):
     created_at: datetime
     customer: Optional[CustomerResponse] = None
     routings: List[PartRoutingResponse] = []
+    materials: List[PartMaterialResponse] = []
     
     class Config:
         from_attributes = True

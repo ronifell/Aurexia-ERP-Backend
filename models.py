@@ -141,6 +141,7 @@ class PartNumber(Base):
     
     customer = relationship("Customer", back_populates="part_numbers")
     routings = relationship("PartRouting", back_populates="part_number", cascade="all, delete-orphan")
+    materials = relationship("PartMaterial", back_populates="part_number", cascade="all, delete-orphan")
 
 class PartRouting(Base):
     __tablename__ = "part_routings"
@@ -154,6 +155,20 @@ class PartRouting(Base):
     
     part_number = relationship("PartNumber", back_populates="routings")
     process = relationship("Process", back_populates="part_routings")
+
+class PartMaterial(Base):
+    __tablename__ = "part_materials"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    part_number_id = Column(Integer, ForeignKey("part_numbers.id", ondelete="CASCADE"))
+    material_id = Column(Integer, ForeignKey("materials.id"))
+    quantity = Column(Numeric(10, 4), nullable=False)  # Quantity per unit of part
+    unit = Column(String(20))  # Unit of measurement (kg, m, pcs, etc.)
+    notes = Column(Text)  # Optional notes about this material requirement
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    part_number = relationship("PartNumber", back_populates="materials")
+    material = relationship("Material")
 
 class SalesOrder(Base):
     __tablename__ = "sales_orders"

@@ -25,6 +25,7 @@ async def get_materials(
     skip: int = 0,
     limit: int = 100,
     type: Optional[str] = None,
+    is_active: Optional[bool] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -32,6 +33,8 @@ async def get_materials(
     query = db.query(Material)
     if type:
         query = query.filter(Material.type == type)
+    if is_active is not None:
+        query = query.filter(Material.is_active == is_active)
     
     materials = query.offset(skip).limit(limit).all()
     return materials
