@@ -58,6 +58,13 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
+class UserProfileUpdate(BaseModel):
+    """Schema for users to update their own profile (excludes role_id, is_active, username)"""
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+    badge_id: Optional[str] = None
+    password: Optional[str] = None
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
@@ -326,7 +333,7 @@ class SalesOrderItemResponse(SalesOrderItemBase):
 
 class SalesOrderBase(BaseModel):
     po_number: str
-    customer_id: int
+    customer_id: Optional[int] = None
     order_date: date
     due_date: date
     status: Optional[str] = 'Open'

@@ -2,7 +2,7 @@
 Sales Order management routes
 """
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from database import get_db
 from models import User, SalesOrder, SalesOrderItem, PartNumber
@@ -21,7 +21,10 @@ async def get_sales_orders(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get all sales orders"""
-    query = db.query(SalesOrder)
+    query = db.query(SalesOrder).options(
+        joinedload(SalesOrder.items).joinedload(SalesOrderItem.part_number),
+        joinedload(SalesOrder.customer)
+    )
     if customer_id:
         query = query.filter(SalesOrder.customer_id == customer_id)
     if status:
@@ -45,7 +48,10 @@ async def get_sales_order(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get a specific sales order"""
-    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    order = db.query(SalesOrder).options(
+        joinedload(SalesOrder.items).joinedload(SalesOrderItem.part_number),
+        joinedload(SalesOrder.customer)
+    ).filter(SalesOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
     

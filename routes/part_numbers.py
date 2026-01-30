@@ -3,9 +3,10 @@ Part Number management routes
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List
 from database import get_db
-from models import User, PartNumber, PartRouting, PartMaterial, PartSubAssembly, Customer, Material
+from models import User, PartNumber, PartRouting, PartMaterial, PartSubAssembly, Customer, Material, SalesOrderItem, ProductionOrder, ShipmentItem
 from schemas import PartNumberResponse, PartNumberCreate, PartNumberUpdate
 from auth import get_current_active_user
 
@@ -240,6 +241,81 @@ async def delete_part_number(
     if not part_number:
         raise HTTPException(status_code=404, detail="Part number not found")
     
+    # Check for dependencies before deletion
+    dependencies = []
+    
+    # Check sales order items
+    sales_order_items_count = db.query(func.count(SalesOrderItem.id)).filter(
+        SalesOrderItem.part_number_id == part_number_id
+    ).scalar()
+    if sales_order_items_count > 0:
+        dependencies.append(f"{sales_order_items_count} sales order item(s)")
+    
+    # Check production orders
+    production_orders_count = db.query(func.count(ProductionOrder.id)).filter(
+        ProductionOrder.part_number_id == part_number_id
+    ).scalar()
+    if production_orders_count > 0:
+        dependencies.append(f"{production_orders_count} production order(s)")
+    
+    # Check shipment items
+    shipment_items_count = db.query(func.count(ShipmentItem.id)).filter(
+        ShipmentItem.part_number_id == part_number_id
+    ).scalar()
+    if shipment_items_count > 0:
+        dependencies.append(f"{shipment_items_count} shipment item(s)")
+    
+    # Check if this part is used as a sub-assembly in other parts
+    sub_assembly_count = db.query(func.count(PartSubAssembly.id)).filter(
+        PartSubAssembly.child_part_id == part_number_id
+    ).scalar()
+    if sub_assembly_count > 0:
+        dependencies.append(f"used as sub-assembly in {sub_assembly_count} part(s)")
+    
+    # If there are dependencies, prevent deletion
+    if dependencies:
+        error_message = f"Cannot delete part number. It is referenced in: {', '.join(dependencies)}. Please remove or update these references first."
+        raise HTTPException(status_code=400, detail=error_message)
+    
+    # All clear - delete the part number
+    # Note: The following will be automatically deleted via cascade:
+    # - PartRouting records (routings for this part)
+    # - PartMaterial records (BOM materials for this part)
+    # - PartSubAssembly records where this part is the parent (sub-assemblies of this part)
+    
+    # Get counts before deletion for logging
+    routings_count = db.query(func.count(PartRouting.id)).filter(
+        PartRouting.part_number_id == part_number_id
+    ).scalar()
+    materials_count = db.query(func.count(PartMaterial.id)).filter(
+        PartMaterial.part_number_id == part_number_id
+    ).scalar()
+    sub_assemblies_as_parent_count = db.query(func.count(PartSubAssembly.id)).filter(
+        PartSubAssembly.parent_part_id == part_number_id
+    ).scalar()
+    
+    # Delete the part number
+    # The following related records will be automatically deleted via CASCADE:
+    # - PartRouting records (via SQLAlchemy cascade="all, delete-orphan" and database ON DELETE CASCADE)
+    # - PartMaterial records (via SQLAlchemy cascade="all, delete-orphan" and database ON DELETE CASCADE)
+    # - PartSubAssembly records where this part is the parent (via SQLAlchemy cascade="all, delete-orphan" and database ON DELETE CASCADE)
+    # 
+    # Note: Database-level CASCADE ensures deletion even if accessed directly via SQL,
+    # while SQLAlchemy's cascade ensures proper ORM-level cleanup.
     db.delete(part_number)
     db.commit()
-    return {"message": "Part number deleted successfully"}
+    
+    # Return detailed success message showing what was synchronized
+    deleted_items = []
+    if routings_count > 0:
+        deleted_items.append(f"{routings_count} routing(s)")
+    if materials_count > 0:
+        deleted_items.append(f"{materials_count} material requirement(s)")
+    if sub_assemblies_as_parent_count > 0:
+        deleted_items.append(f"{sub_assemblies_as_parent_count} sub-assembly definition(s)")
+    
+    message = "Part number deleted successfully"
+    if deleted_items:
+        message += f". Synchronized deletion of related content: {', '.join(deleted_items)}"
+    
+    return {"message": message}
