@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List
 from database import get_db
-from models import User, PartNumber, PartRouting, PartMaterial, PartSubAssembly, Customer, Material, SalesOrderItem, ProductionOrder, ShipmentItem
+from models import User, PartNumber, PartRouting, PartMaterial, PartSubAssembly, Customer, Material, Process, SalesOrderItem, ProductionOrder, ShipmentItem
 from schemas import PartNumberResponse, PartNumberCreate, PartNumberUpdate
 from auth import get_current_active_user
 
@@ -156,9 +156,30 @@ async def update_part_number(
     if not part_number:
         raise HTTPException(status_code=404, detail="Part number not found")
     
-    update_data = part_number_update.model_dump(exclude_unset=True, exclude={'materials', 'sub_assemblies'})
+    update_data = part_number_update.model_dump(exclude_unset=True, exclude={'routings', 'materials', 'sub_assemblies'})
     for field, value in update_data.items():
         setattr(part_number, field, value)
+    
+    # Update routings if provided (explicitly set in request)
+    if part_number_update.routings is not None:
+        # Delete existing routings
+        db.query(PartRouting).filter(PartRouting.part_number_id == part_number_id).delete()
+        
+        # Validate and create new routings (if any)
+        if part_number_update.routings:
+            # Validate processes exist
+            for routing in part_number_update.routings:
+                process_exists = db.query(Process).filter(Process.id == routing.process_id).first()
+                if not process_exists:
+                    raise HTTPException(status_code=400, detail=f"Process with ID {routing.process_id} not found")
+            
+            # Create new routings
+            for routing in part_number_update.routings:
+                db_routing = PartRouting(
+                    part_number_id=part_number_id,
+                    **routing.model_dump()
+                )
+                db.add(db_routing)
     
     # Update materials if provided (explicitly set in request)
     if part_number_update.materials is not None:

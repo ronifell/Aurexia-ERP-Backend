@@ -293,6 +293,8 @@ class PartNumberUpdate(BaseModel):
     material_type: Optional[str] = None
     unit_price: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    customer_id: Optional[int] = None
+    routings: Optional[List[PartRoutingCreate]] = None
     materials: Optional[List[PartMaterialCreate]] = None
     sub_assemblies: Optional[List[PartSubAssemblyCreate]] = None
 
